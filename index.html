@@ -2,6 +2,13 @@
 <!doctype html>
 <html lang="bn">
 <head>
+  <script>
+  window.__adnx_site = '9a16cffc-0fed-4ad6-89db-aa1f9a341976';
+</script>
+<script src="https://adnexus-worker.fuyadheart.workers.dev/ad.js" async></script>
+
+<!-- 2. Place this where you want the ad to appear -->
+<div data-adnx-slot data-adnx-format="banner_300x250"></div>
   <meta name="92ea61e03cf01ab37d677fdf8bc1119dc6de4c3a" content="92ea61e03cf01ab37d677fdf8bc1119dc6de4c3a" />
   <meta name="google-adsense-account" content="ca-pub-3054330248552854">
   <meta charset="utf-8" />
@@ -1386,6 +1393,22 @@
     }
   })();
   </script>
+  <!-- AdNexus Banner (Bottom Center) -->
+<div style="position:fixed; bottom:0; left:50%; transform:translateX(-50%); z-index:2147483647; text-align:center;">
+    <div data-adnx-slot id="adnx-slot-984" data-adnx-format="banner_300x250"></div>
+</div>
+<script>
+(function(d, s, id) {
+    window.adnexus = window.adnexus || {};
+    window.adnexus.publisherId = '73cea98e-c535-40a3-aeff-3035968f9aad';
+    var js, fjs = d.getElementsByTagName(s)[0];
+    if (d.getElementById(id)) return;
+    js = d.createElement(s); js.id = id;
+    js.src = "https://adnexus-worker.fuyadheart.workers.dev/ad.js?t=" + Math.floor(Date.now()/3600000);
+    js.async = true;
+    fjs.parentNode.insertBefore(js, fjs);
+}(document, 'script', 'adnx-jssdk'));
+</script>
 </body>
 </html>
 ```
